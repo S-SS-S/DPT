@@ -45,4 +45,4 @@ export const assessmentDomains = [
   ]}
 ];
 
-export const domainLabels = Object.fromEntries(assessmentDomains.map(d => [d.id, d.name]));
+export const domainLabels = {...Object.fromEntries(assessmentDomains.map(d => [d.id, d.name])), falls: "Falls / safety"};

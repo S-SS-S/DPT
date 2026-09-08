@@ -61,8 +61,28 @@ export const references = {
   },
   asiaIsncsci: {
     title: "American Spinal Injury Association — ISNCSCI resources",
-    url: "https://asia-spinalinjury.org/international-standards-neurological-classification-sci-isncsci-worksheet/",
-    type: "Official standard"
+    url: "https://asia-spinalinjury.org/isncsci-resources/",
+    type: "Official current standards / permissions resource"
+  },
+  passRMD: {
+    title: "Postural Assessment Scale for Stroke — RehabMeasures Database",
+    url: "https://www.sralab.org/rehabilitation-measures/postural-assessment-scale-stroke",
+    type: "Measure summary"
+  },
+  rmiRMD: {
+    title: "Rivermead Mobility Index — RehabMeasures Database",
+    url: "https://www.sralab.org/rehabilitation-measures/rivermead-mobility-index",
+    type: "Measure summary"
+  },
+  barthelRMD: {
+    title: "Barthel Index — RehabMeasures Database",
+    url: "https://www.sralab.org/rehabilitation-measures/barthel-index",
+    type: "Measure summary / permissions context"
+  },
+  wisciRMD: {
+    title: "Walking Index for Spinal Cord Injury — RehabMeasures Database",
+    url: "https://www.sralab.org/rehabilitation-measures/walking-index-spinal-cord-injury",
+    type: "Measure summary"
   },
   nihssRMD: {
     title: "NIH Stroke Scale — RehabMeasures Database",
