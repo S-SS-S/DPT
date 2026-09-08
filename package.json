@@ -1,0 +1,9 @@
+{
+  "name": "neuro-pt-clinical-companion",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "test": "node tests/smoke.mjs"
+  }
+}
