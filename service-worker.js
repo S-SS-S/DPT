@@ -1,0 +1,5 @@
+const CACHE="neuropt-v1.0.0";
+const CORE=["./","./index.html","./css/styles.css","./css/components.css","./css/responsive.css","./js/app.js","./js/router.js","./js/state.js","./js/storage.js","./js/utils.js","./js/scoring-engine.js","./js/clinical-engine.js","./js/goal-engine.js","./js/ai-service.js","./js/data/conditions.js","./js/data/measures.js","./js/data/assessment-domains.js","./js/data/references.js","./assets/icons/icon.svg"];
+self.addEventListener("install",e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(CORE)).then(()=>self.skipWaiting()))});
+self.addEventListener("activate",e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});
+self.addEventListener("fetch",e=>{if(e.request.method!=="GET")return;e.respondWith(caches.match(e.request).then(cached=>cached||fetch(e.request).then(r=>{if(r.ok){const copy=r.clone();caches.open(CACHE).then(c=>c.put(e.request,copy))}return r}).catch(()=>caches.match("./index.html"))))});

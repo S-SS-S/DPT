@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#0f2742">
+  <meta name="description" content="Neuro PT clinical decision-support for assessment planning, outcome measures, score tracking, interpretation, and draft rehabilitation goals.">
+  <title>Neuro PT Clinical Companion</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./assets/icons/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./css/styles.css">
+  <link rel="stylesheet" href="./css/components.css">
+  <link rel="stylesheet" href="./css/responsive.css">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to content</a>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Primary navigation">
+      <a class="brand" href="#/" aria-label="Neuro PT home">
+        <span class="brand-mark" aria-hidden="true">N</span>
+        <span><strong>Neuro PT</strong><small>Clinical Companion</small></span>
+      </a>
+      <nav id="side-nav" class="nav-stack"></nav>
+      <div class="sidebar-foot">
+        <button id="theme-toggle" class="icon-button" type="button" aria-label="Toggle color theme">
+          <span aria-hidden="true">◐</span><span class="theme-label">Theme</span>
+        </button>
+        <p class="privacy-note">Local-first. No login. No patient identifiers.</p>
+      </div>
+    </aside>
+
+    <div class="workspace">
+      <header class="topbar">
+        <button id="menu-toggle" class="icon-button mobile-only" type="button" aria-label="Open navigation">☰</button>
+        <div class="search-wrap">
+          <label class="sr-only" for="global-search">Search conditions, measures, and domains</label>
+          <input id="global-search" type="search" autocomplete="off" placeholder="Search stroke, BBS, gait, ataxia…">
+          <div id="search-results" class="search-results" role="listbox" aria-label="Search results" hidden></div>
+        </div>
+        <a class="button button-primary top-action" href="#/assessment">Start assessment</a>
+      </header>
+
+      <main id="main-content" tabindex="-1">
+        <noscript>This application requires JavaScript.</noscript>
+      </main>
+
+      <footer class="site-footer">
+        <p><strong>Clinical decision-support tool.</strong> For education and rehabilitation planning. It does not replace examination, diagnosis, local protocols, or clinician judgment. Urgent or new neurological symptoms require appropriate medical evaluation.</p>
+      </footer>
+    </div>
+  </div>
+
+  <nav id="mobile-nav" class="mobile-nav" aria-label="Mobile navigation"></nav>
+  <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>

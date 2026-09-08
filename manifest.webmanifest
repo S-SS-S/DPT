@@ -1,0 +1,11 @@
+{
+  "name":"Neuro PT Clinical Companion",
+  "short_name":"Neuro PT",
+  "description":"Local-first neuro physical therapy assessment and outcome-measure decision support.",
+  "start_url":"./",
+  "scope":"./",
+  "display":"standalone",
+  "background_color":"#0f2742",
+  "theme_color":"#0f2742",
+  "icons":[{"src":"./assets/icons/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}
