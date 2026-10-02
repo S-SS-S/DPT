@@ -346,6 +346,11 @@ function renderGoals(){
 }
 function wireGoalEvents(c,after){
   $("#generate-goals")?.addEventListener("click",()=>{
+    const insight=interpretCase(c);
+    if(!insight.priorities.length){
+      toast("Enter structured assessment findings or mark at least one priority domain before generating the plan.");
+      return;
+    }
     const tf=$("#goal-timeframe")?.value||"4 weeks";
     c.goals=generateGoals(c,tf);
     c.plan=generatePlan(c);
