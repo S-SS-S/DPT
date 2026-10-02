@@ -1,7 +1,10 @@
 import { conditionById } from "./data/conditions.js";
 import { measureById } from "./data/measures.js";
-import { domainLabels } from "./data/assessment-domains.js";
+import { assessmentDomains, domainLabels } from "./data/assessment-domains.js";
 import { compareScores, matchingChangeEvidence } from "./scoring-engine.js";
+
+const domainById=Object.fromEntries(assessmentDomains.map(d=>[d.id,d]));
+const hasValue=v=>v!==null&&v!==undefined&&String(v).trim()!=="";
 
 function getLatestEntries(caseData){
   const points=[...(caseData.timepoints||[])].sort((a,b)=>String(a.date).localeCompare(String(b.date)));
@@ -9,10 +12,26 @@ function getLatestEntries(caseData){
   return {latest,previous};
 }
 
+function structuredFindingSummary(caseData,domainId){
+  const values=caseData.assessment?.details?.[domainId]||{};
+  const domain=domainById[domainId];
+  if(!domain)return [];
+  return (domain.fields||[]).map(f=>({label:f.label,value:values[f.key]})).filter(x=>hasValue(x.value));
+}
+
+function scoreRangeText(m){
+  const r=m.scoreRange||{};
+  if(Number.isFinite(r.min)&&Number.isFinite(r.max))return `${r.min}–${r.max} ${r.unit||""}`.trim();
+  if(Number.isFinite(r.min))return `${r.min}+ ${r.unit||""}`.trim();
+  return "See verified instrument/version";
+}
+
 export function interpretCase(caseData){
   const condition=conditionById[caseData.diagnosisId];
   const {latest,previous}=getLatestEntries(caseData);
   const concerns=new Set(caseData.assessment?.concerns||[]);
+  const details=caseData.assessment?.details||{};
+  const detailDomains=new Set(Object.entries(details).filter(([,v])=>Object.values(v||{}).some(hasValue)).map(([k])=>k));
   const measuredDomains=new Set();
   const scoreStatements=[];
   const changeStatements=[];
@@ -21,11 +40,12 @@ export function interpretCase(caseData){
   for(const entry of latest?.scores||[]){
     const m=measureById[entry.measureId]; if(!m)continue;
     m.domains.forEach(d=>measuredDomains.add(d));
-    const direction=m.scoreDirection==="higher"?"higher is better":m.scoreDirection==="lower"?"lower is better":"context-dependent";
+    const direction=m.scoreDirection==="higher"?"higher values generally represent better performance":m.scoreDirection==="lower"?"lower values generally represent better performance":"interpretation is context-dependent";
+    const clinicianReference=entry.protocol?.referenceTarget? ` Clinician-entered reference/target: ${entry.protocol.referenceTarget}.`:"";
     scoreStatements.push({
       title:`${m.acronym}: ${entry.value} ${entry.unit||""}`.trim(),
-      text:`${m.purpose} Scoring direction: ${direction}. No universal diagnostic threshold is applied.`,
-      confidence:"Directly supported by measure metadata"
+      text:`Reference frame: ${scoreRangeText(m)}; ${direction}. ${m.interpretation}${clinicianReference}`,
+      confidence:"Measure metadata + entered result"
     });
     if(previous){
       const old=previous.scores?.find(s=>s.measureId===entry.measureId);
@@ -55,17 +75,24 @@ export function interpretCase(caseData){
 
   const priorityDomains=[...new Set([
     ...concerns,
-    ...(condition?.goalDomains||[]).filter(d=>concerns.has(d)||measuredDomains.has(d))
+    ...detailDomains,
+    ...(condition?.goalDomains||[]).filter(d=>concerns.has(d)||detailDomains.has(d)||measuredDomains.has(d))
   ])];
 
-  const priorities=priorityDomains.map(d=>({
-    id:d,
-    title:domainLabels[d]||d,
-    text:concerns.has(d)
-      ? "Marked as a clinical concern in the assessment. Use examination findings and matching outcome measures to define the problem and target."
-      : "This domain is relevant to the selected condition and is represented by the chosen outcome measures.",
-    confidence:concerns.has(d)?"Direct assessment input":"Condition/measure mapping"
-  }));
+  const priorities=priorityDomains.map(d=>{
+    const findings=structuredFindingSummary(caseData,d);
+    const preview=findings.slice(0,4).map(x=>`${x.label}: ${x.value}`).join("; ");
+    return {
+      id:d,
+      title:domainLabels[d]||d,
+      text:preview
+        ? `Structured findings: ${preview}${findings.length>4?"; …":""}`
+        : concerns.has(d)
+          ? "Marked as a clinical concern. Add structured findings and a matching outcome measure where appropriate."
+          : "Relevant to the selected condition and represented by the chosen outcome measures.",
+      confidence:preview?"Direct structured assessment input":concerns.has(d)?"Direct assessment input":"Condition/measure mapping"
+    };
+  });
 
   const reassessment=[...new Set((caseData.selectedMeasures||[]).map(id=>measureById[id]?.acronym).filter(Boolean))];
 
@@ -77,7 +104,7 @@ export function interpretCase(caseData){
     evidenceStatements,
     reassessment,
     caveat: latest
-      ? "Interpretation is rules-based and transparent. It summarizes the selected condition, clinician-marked concerns, and entered scores; it does not diagnose or prescribe treatment."
-      : "Add a score timepoint to generate score-specific interpretation."
+      ? "Interpretation is rules-based and transparent. It combines structured examination findings, the selected condition, clinician-marked concerns and entered scores; it does not diagnose or replace clinician judgment."
+      : "Structured examination findings can guide priorities now. Add a score timepoint for score-specific interpretation."
   };
 }
