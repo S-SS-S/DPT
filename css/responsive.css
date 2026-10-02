@@ -10,3 +10,5 @@
   .card,.notice,.check-section{box-shadow:none!important;break-inside:avoid;border-color:#cfd5da!important}
   .section{break-inside:avoid}
 }
+
+@media(max-width:780px){.structured-findings-head{display:grid}.reference-basis{min-width:220px}.score-target{min-width:170px}}
