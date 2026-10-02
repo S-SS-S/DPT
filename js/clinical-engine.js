@@ -41,7 +41,19 @@ export function interpretCase(caseData){
     const m=measureById[entry.measureId]; if(!m)continue;
     m.domains.forEach(d=>measuredDomains.add(d));
     const direction=m.scoreDirection==="higher"?"higher values generally represent better performance":m.scoreDirection==="lower"?"lower values generally represent better performance":"interpretation is context-dependent";
-    const clinicianReference=entry.protocol?.referenceTarget? ` Clinician-entered reference/target: ${entry.protocol.referenceTarget}.`:"";
+    let clinicianReference="";
+    if(entry.protocol?.referenceTarget){
+      clinicianReference=` Clinician-entered reference/target: ${entry.protocol.referenceTarget}.`;
+      if(typeof entry.value==="number" && m.scoreDirection!=="context"){
+        const parsed=Number.parseFloat(String(entry.protocol.referenceTarget).replace(/[^0-9.+-]/g,""));
+        if(Number.isFinite(parsed)){
+          const meets=m.scoreDirection==="higher"?entry.value>=parsed:entry.value<=parsed;
+          clinicianReference+=meets
+            ? " The current value meets or exceeds that clinician-entered benchmark in the favorable direction."
+            : " The current value has not yet reached that clinician-entered benchmark in the favorable direction.";
+        }
+      }
+    }
     scoreStatements.push({
       title:`${m.acronym}: ${entry.value} ${entry.unit||""}`.trim(),
       text:`Reference frame: ${scoreRangeText(m)}; ${direction}. ${m.interpretation}${clinicianReference}`,
