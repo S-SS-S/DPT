@@ -106,6 +106,7 @@ export function generatePlan(caseData){
   const focus=unique.map(domain=>({
     domain,
     title:domainLabels[domain]||domain,
+    baseline:baselineForDomain(caseData,domain)||"Priority selected; add a structured baseline or outcome score for a more specific plan.",
     items:interventionLibrary[domain].slice(0,4)
   }));
   const nextSession=[
