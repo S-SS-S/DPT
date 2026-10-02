@@ -4,9 +4,9 @@ import { assessmentDomains, domainLabels } from "./data/assessment-domains.js";
 import { resolveReferences } from "./data/references.js";
 import { state, ensureWorkingCase, setWorkingCase, createEmptyCase } from "./state.js";
 import { getCases, upsertCase, deleteCase, duplicateCase, clearCases, exportBackup, importBackup, getPrefs, setPref } from "./storage.js";
-import { buildScoreEntry } from "./scoring-engine.js";
+import { buildScoreEntry, matchingChangeEvidence } from "./scoring-engine.js";
 import { interpretCase } from "./clinical-engine.js";
-import { generateGoals } from "./goal-engine.js";
+import { generateGoals, generatePlan } from "./goal-engine.js";
 import { parseHash, navigate } from "./router.js";
 import { $, $$, esc, formatDate, debounce, toast, downloadJson, titleCase } from "./utils.js";
 
@@ -155,7 +155,7 @@ function renderMeasure(id){
 }
 
 function stepper(current){
-  return `<div class="stepper">${["Case","Assessment","Measures","Scores","Goals & save"].map((x,i)=>`<div class="step ${current===i+1?"active":current>i+1?"done":""}">${i+1}. ${x}</div>`).join("")}</div>`;
+  return `<div class="stepper">${["Case","Assessment","Measures","Scores","Goals & plan"].map((x,i)=>`<div class="step ${current===i+1?"active":current>i+1?"done":""}">${i+1}. ${x}</div>`).join("")}</div>`;
 }
 function startAssessmentWithCondition(id){
   const c=createEmptyCase(); c.diagnosisId=id; setWorkingCase(c); state.assessmentStep=1; navigate("/assessment");
@@ -173,12 +173,32 @@ function caseForm(c){
     <div class="field field-span-2"><label for="primary-goal">Primary patient priority</label><textarea id="primary-goal" data-bind="primaryGoal" placeholder="Non-identifying functional priority…">${esc(c.primaryGoal)}</textarea></div>
   </div></div>`;
 }
+function assessmentFieldControl(domain,field,value){
+  const id=`finding-${domain.id}-${field.key}`;
+  const common=`id="${id}" data-assessment-domain="${domain.id}" data-assessment-field="${field.key}"`;
+  if(field.type==="select"){
+    return `<div class="field"><label for="${id}">${esc(field.label)}</label><select ${common}>${(field.options||[""]).map(opt=>`<option value="${esc(opt)}" ${String(value||"")===String(opt)?"selected":""}>${esc(opt||"Not recorded")}</option>`).join("")}</select></div>`;
+  }
+  if(field.type==="textarea"){
+    return `<div class="field field-span-2"><label for="${id}">${esc(field.label)}</label><textarea ${common} placeholder="${esc(field.placeholder||"")}">${esc(value||"")}</textarea></div>`;
+  }
+  return `<div class="field"><label for="${id}">${esc(field.label)}${field.unit?` <span class="score-note">(${esc(field.unit)})</span>`:""}</label><input ${common} type="${field.type==="number"?"number":"text"}" ${field.type==="number"?'step="any"':""} value="${esc(value||"")}" placeholder="${esc(field.placeholder||"")}"></div>`;
+}
 function assessmentChecklist(c){
   const condition=conditionById[c.diagnosisId];
+  c.assessment=c.assessment||{concerns:[],checked:[],details:{}};
+  c.assessment.details=c.assessment.details||{};
   const concernSet=new Set(c.assessment?.concerns||[]);
   const checkedSet=new Set(c.assessment?.checked||[]);
-  return `<div class="notice" style="margin-bottom:14px">Mark domains that are clinically impaired/important. These clinician-marked concerns drive the local interpretation and draft-goal engine more than arbitrary score thresholds.</div>
-  <div class="checklist">${assessmentDomains.map((d,i)=>`<details class="check-section" ${i<4||condition?.assessmentDomains.includes(d.id)?"open":""}><summary><span>${d.name}</span><label class="chip"><input type="checkbox" data-concern="${d.id}" ${concernSet.has(d.id)?"checked":""}> Priority domain</label></summary><div class="check-body">${d.items.map((item,j)=>{const key=`${d.id}:${j}`;return `<label class="check-item"><input type="checkbox" data-check="${key}" ${checkedSet.has(key)?"checked":""}><span>${esc(item)}${condition?.assessmentDomains.includes(d.id)?`<small>Relevant to ${esc(condition.name)}</small>`:""}</span></label>`}).join("")}</div></details>`).join("")}
+  return `<div class="notice" style="margin-bottom:14px"><strong>Record actual examination findings, not only checkboxes.</strong> Priority domains, structured values and outcome scores are all used by the clinical insight, SMART-goal and rehabilitation-plan logic.</div>
+  <div class="checklist">${assessmentDomains.map((d,i)=>{
+    const values=c.assessment.details[d.id]||{};
+    const hasDetails=Object.values(values).some(v=>String(v??"").trim());
+    return `<details class="check-section" ${i<4||condition?.assessmentDomains.includes(d.id)||hasDetails?"open":""}><summary><span>${d.name}</span><label class="chip"><input type="checkbox" data-concern="${d.id}" ${concernSet.has(d.id)?"checked":""}> Priority domain</label></summary><div class="check-body">
+      <div class="check-items">${d.items.map((item,j)=>{const key=`${d.id}:${j}`;return `<label class="check-item"><input type="checkbox" data-check="${key}" ${checkedSet.has(key)?"checked":""}><span>${esc(item)}${condition?.assessmentDomains.includes(d.id)?`<small>Relevant to ${esc(condition.name)}</small>`:""}</span></label>`}).join("")}</div>
+      <div class="structured-findings"><div class="structured-findings-head"><strong>Record findings</strong><small>Enter the actual side, grade, range, assistance level or clinical finding where relevant.</small></div><div class="form-grid">${(d.fields||[]).map(field=>assessmentFieldControl(d,field,values[field.key])).join("")}</div></div>
+    </div></details>`;
+  }).join("")}
   ${condition?`<div class="card"><h3>${esc(condition.name)} — diagnosis-specific additions</h3><ul class="bullets">${condition.specificAssessment.map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div>`:""}</div>`;
 }
 function measurePicker(c){
@@ -191,15 +211,26 @@ function measurePicker(c){
   <div class="grid grid-2">${groups.map(([priority,ids])=>`<div class="card"><div class="card-top"><h3>${titleCase(priority)}</h3>${chip(priority,priority)}</div>${[...new Set(ids)].map(id=>{const m=measureById[id];if(!m)return"";return `<label class="measure-row"><div><strong>${esc(m.acronym)}</strong> — ${esc(m.name)}<p>${esc(m.purpose)}</p></div><input type="checkbox" data-measure-select="${m.id}" ${selected.has(m.id)?"checked":""} aria-label="Select ${esc(m.acronym)}"></label>`}).join("")}</div>`).join("")}</div>
   <div class="card section"><h3>Selected (${selected.size})</h3><div class="card-footer">${[...selected].map(id=>chip(measureById[id]?.acronym||id,"recommended")).join("")||"<span class='score-note'>No measures selected yet.</span>"}</div></div>`;
 }
+function measureReferenceBasis(m,c){
+  const r=m.scoreRange||{};
+  const range=Number.isFinite(r.min)&&Number.isFinite(r.max)?`${r.min}–${r.max} ${r.unit||""}`:Number.isFinite(r.min)?`${r.min}+ ${r.unit||""}`:"Version-specific / categorical";
+  const direction=m.scoreDirection==="higher"?"Higher generally = better performance":m.scoreDirection==="lower"?"Lower generally = better performance":"Context-dependent";
+  const condition=conditionById[c.diagnosisId];
+  const family=condition?.familyId==="stroke"?"stroke":condition?.familyId==="sci"?"sci":condition?.familyId;
+  const matches=matchingChangeEvidence(m,{...c,diagnosisFamily:family});
+  const change=matches.length?`<div class="reference-badge"><strong>${esc(matches[0].type)}:</strong> ${esc(matches[0].value)} ${esc(matches[0].unit)} — ${esc(matches[0].label)}</div>`:"";
+  return `<div class="reference-basis"><strong>Scale / range:</strong> ${esc(range)}<br><strong>Direction:</strong> ${esc(direction)}<br><span>${esc(m.interpretation)}</span>${change}<small>No universal “normal/abnormal” label is applied unless valid population-specific evidence is stored.</small></div>`;
+}
 function scoreRows(c){
   if(!c.selectedMeasures?.length)return `<div class="empty"><strong>No measures selected</strong>Go back to the measure-selection step.</div>`;
   return `<div class="card"><div class="inline-fields" style="margin-bottom:12px"><div class="field"><label for="tp-date">Assessment date</label><input type="date" id="tp-date" value="${new Date().toISOString().slice(0,10)}"></div><div class="field"><label for="tp-label">Timepoint</label><select id="tp-label">${["Initial","Week 2","Week 4","Week 6","Week 8","Week 12","Discharge","Follow-up"].map(x=>`<option>${x}</option>`).join("")}</select></div></div>
-  <table class="score-table"><thead><tr><th>Measure</th><th>Entry</th><th>Context</th></tr></thead><tbody>${c.selectedMeasures.map(id=>{
+  <div class="table-scroll"><table class="score-table"><thead><tr><th>Measure</th><th>Reference basis</th><th>Entry</th><th>Clinician target / reference</th></tr></thead><tbody>${c.selectedMeasures.map(id=>{
     const m=measureById[id];if(!m)return"";
-    if(m.inputType==="gait-speed")return `<tr><td><strong>${m.acronym}</strong><div class="score-note">${esc(m.name)}</div></td><td><div class="inline-fields"><input class="score-input" id="score-${m.id}-distance" type="number" step="0.01" min="0" placeholder="distance m"><input class="score-input" id="score-${m.id}-time" type="number" step="0.01" min="0" placeholder="time s"></div><div id="error-${m.id}" class="score-error"></div></td><td><select class="score-input" id="score-${m.id}-speedtype"><option value="comfortable">Comfortable</option><option value="fast">Fast</option></select><div class="score-note">Exact timed distance is stored with the result.</div></td></tr>`;
+    const ref=measureReferenceBasis(m,c);
+    if(m.inputType==="gait-speed")return `<tr><td><strong>${m.acronym}</strong><div class="score-note">${esc(m.name)}</div></td><td>${ref}</td><td><div class="inline-fields"><input class="score-input" id="score-${m.id}-distance" type="number" step="0.01" min="0" placeholder="distance m"><input class="score-input" id="score-${m.id}-time" type="number" step="0.01" min="0" placeholder="time s"></div><select class="score-input" id="score-${m.id}-speedtype"><option value="comfortable">Comfortable</option><option value="fast">Fast</option></select><div id="error-${m.id}" class="score-error"></div></td><td><input class="score-target" id="score-${m.id}-reference" type="text" placeholder="Optional target, norm or service benchmark"><div class="score-note">Stored with this timepoint for transparent comparison.</div></td></tr>`;
     const type=m.inputType==="text"?"text":"number",step=m.scoreRange?.step||((m.inputType==="integer")?1:"any");
-    return `<tr><td><strong>${m.acronym}</strong><div class="score-note">${esc(m.name)}</div></td><td><input class="score-input" id="score-${m.id}" type="${type}" ${type==="number"?`step="${step}" min="${m.scoreRange?.min??0}" ${Number.isFinite(m.scoreRange?.max)?`max="${m.scoreRange.max}"`:""}`:""} placeholder="${m.scoreRange?.unit||"value"}"><div id="error-${m.id}" class="score-error"></div></td><td><div class="score-note">${esc(m.scoringNotes)}</div></td></tr>`;
-  }).join("")}</tbody></table><div class="page-actions" style="margin-top:16px"><button id="save-timepoint" class="button button-primary">Save score timepoint</button></div></div>`;
+    return `<tr><td><strong>${m.acronym}</strong><div class="score-note">${esc(m.name)}</div></td><td>${ref}</td><td><input class="score-input" id="score-${m.id}" type="${type}" ${type==="number"?`step="${step}" min="${m.scoreRange?.min??0}" ${Number.isFinite(m.scoreRange?.max)?`max="${m.scoreRange.max}"`:""}`:""} placeholder="${m.scoreRange?.unit||"value"}"><div id="error-${m.id}" class="score-error"></div></td><td><input class="score-target" id="score-${m.id}-reference" type="text" placeholder="Optional target, norm or service benchmark"><div class="score-note">${esc(m.scoringNotes)}</div></td></tr>`;
+  }).join("")}</tbody></table></div><div class="page-actions" style="margin-top:16px"><button id="save-timepoint" class="button button-primary">Save score timepoint</button></div></div>`;
 }
 function insightHtml(c){
   const insight=interpretCase(c);
@@ -209,11 +240,24 @@ function insightHtml(c){
   ${insight.changeStatements.length?`<section class="section"><div class="section-head"><div><h2>Change since prior timepoint</h2><p>Meaningful change is only labeled when stored evidence matches the selected context.</p></div></div><div class="grid grid-2">${insight.changeStatements.map(x=>`<div class="card"><h3>${esc(x.title)}</h3><p>${esc(x.text)}</p><span class="confidence">${esc(x.confidence)}</span></div>`).join("")}</div></section>`:""}
   <section class="section"><div class="card"><h3>Suggested reassessment set</h3><p>${insight.reassessment.length?`Consider repeating: ${insight.reassessment.map(esc).join(", ")}. Keep protocol, device/assistance, and scoring version consistent where possible.`:"Select measures first."}</p></div></section>`;
 }
+function planHtml(c){
+  const plan=c.plan;
+  if(!plan)return `<section class="section"><div class="empty"><strong>No rehabilitation plan draft yet</strong>Generate goals and plan after entering structured assessment findings.</div></section>`;
+  return `<section class="section"><div class="section-head"><div><h2>Editable rehabilitation plan</h2><p>Generated from setting, phase and documented priority domains. Final dose and exercises remain clinician decisions.</p></div></div>
+  <div class="card"><div class="form-grid">
+    <div class="field"><label>Suggested frequency</label><input data-plan-dose="frequency" value="${esc(plan.dose?.frequency||"")}"></div>
+    <div class="field"><label>Estimated session block</label><input data-plan-dose="sessions" value="${esc(plan.dose?.sessions||"")}"></div>
+    <div class="field field-span-2"><label>Planning rationale</label><textarea readonly>${esc(plan.dose?.rationale||"")}</textarea></div>
+  </div><div class="notice notice-warning" style="margin-top:14px">${esc(plan.disclaimer||"")}</div></div>
+  <div class="grid grid-2 section">${(plan.focus||[]).map((group,i)=>`<div class="card"><div class="card-top"><h3>${esc(group.title)}</h3>${chip(group.title,"recommended")}</div><label class="field" style="margin-top:12px"><span>Exercise / task focus</span><textarea data-plan-focus="${i}">${esc((group.items||[]).join("\n"))}</textarea></label></div>`).join("")}</div>
+  <div class="grid grid-2 section"><div class="card"><h3>Next session plan</h3><textarea class="plan-textarea" data-plan-next>${esc((plan.nextSession||[]).join("\n"))}</textarea></div><div class="card"><h3>Follow-up / progression</h3><textarea class="plan-textarea" data-plan-followup>${esc((plan.followUp||[]).join("\n"))}</textarea></div></div></section>`;
+}
 function goalsHtml(c){
   const goals=c.goals||[];
-  return `<div class="form-grid" style="margin-bottom:16px"><div class="field"><label for="goal-timeframe">Draft goal timeframe</label><select id="goal-timeframe">${["1–2 weeks","4 weeks","6 weeks","8 weeks","12 weeks","custom"].map(x=>`<option>${x}</option>`).join("")}</select></div><div class="field"><label>&nbsp;</label><button id="generate-goals" class="button button-primary">Generate / refresh draft goals</button></div></div>
-  <div class="notice">Goals are editable drafts. The engine will not invent a numeric target when matching evidence is unavailable; clinician selection is required.</div>
-  <div class="section grid grid-2" id="goal-list">${goals.length?goals.map(g=>`<div class="card goal-card" data-goal="${g.id}"><div class="card-top"><div><h3>${esc(g.title)}</h3><p>Baseline: ${esc(g.baseline)}</p></div>${chip(domainLabels[g.domain]||g.domain,"recommended")}</div><textarea data-goal-text="${g.id}">${esc(g.text)}</textarea><small>${esc(g.evidenceNote)}</small><div class="goal-status"><label for="status-${g.id}">Status</label><select id="status-${g.id}" data-goal-status="${g.id}">${["Not started","In progress","Met","Revised"].map(x=>`<option ${g.status===x?"selected":""}>${x}</option>`).join("")}</select></div></div>`).join(""):`<div class="empty" style="grid-column:1/-1"><strong>No draft goals yet</strong>Mark priority domains and generate goals.</div>`}</div>`;
+  return `<div class="form-grid" style="margin-bottom:16px"><div class="field"><label for="goal-timeframe">SMART goal timeframe</label><select id="goal-timeframe">${["1–2 weeks","4 weeks","6 weeks","8 weeks","12 weeks","custom"].map(x=>`<option>${x}</option>`).join("")}</select></div><div class="field"><label>&nbsp;</label><button id="generate-goals" class="button button-primary">Generate / refresh SMART goals + rehab plan</button></div></div>
+  <div class="notice"><strong>Goals use the actual entered baseline when available.</strong> They remain editable. The engine does not invent a numeric target when matching evidence is unavailable.</div>
+  <div class="section grid grid-2" id="goal-list">${goals.length?goals.map(g=>`<div class="card goal-card" data-goal="${g.id}"><div class="card-top"><div><h3>${esc(g.title)}</h3><p>Baseline: ${esc(g.baseline)}</p></div>${chip(domainLabels[g.domain]||g.domain,"recommended")}</div><textarea data-goal-text="${g.id}">${esc(g.text)}</textarea><small>${esc(g.evidenceNote)}</small><div class="goal-status"><label for="status-${g.id}">Status</label><select id="status-${g.id}" data-goal-status="${g.id}">${["Not started","In progress","Met","Revised"].map(x=>`<option ${g.status===x?"selected":""}>${x}</option>`).join("")}</select></div></div>`).join(""):`<div class="empty" style="grid-column:1/-1"><strong>No draft goals yet</strong>Enter findings, mark priorities and generate SMART goals.</div>`}</div>
+  ${planHtml(c)}`;
 }
 function renderAssessment(){
   const c=ensureWorkingCase(), step=state.assessmentStep;
@@ -240,9 +284,19 @@ function wireAssessment(step,c){
     $$("[data-concern]").forEach(el=>el.addEventListener("change",()=>{
       c.assessment.concerns=$$("[data-concern]:checked").map(x=>x.dataset.concern);
     }));
-    $$("[data-check]").forEach(el=>el.addEventListener("change",()=>{
-      c.assessment.checked=$$("[data-check]:checked").map(x=>x.dataset.check);
+    $("[data-check]").forEach(el=>el.addEventListener("change",()=>{
+      c.assessment.checked=$("[data-check]:checked").map(x=>x.dataset.check);
     }));
+    $("[data-assessment-field]").forEach(el=>{
+      const saveFinding=e=>{
+        const domain=e.currentTarget.dataset.assessmentDomain,field=e.currentTarget.dataset.assessmentField;
+        c.assessment.details=c.assessment.details||{};
+        c.assessment.details[domain]=c.assessment.details[domain]||{};
+        c.assessment.details[domain][field]=e.currentTarget.value;
+      };
+      el.addEventListener("input",saveFinding);
+      el.addEventListener("change",saveFinding);
+    });
   }
   if(step===3){
     $$("[data-measure-select]").forEach(el=>el.addEventListener("change",()=>{
@@ -264,8 +318,8 @@ function saveTimepoint(c,after){
   c.selectedMeasures.forEach(id=>{
     const m=measureById[id];let result;
     if(m.inputType==="gait-speed"){
-      result=buildScoreEntry(id,null,{distance:$(`#score-${id}-distance`)?.value,time:$(`#score-${id}-time`)?.value,speedType:$(`#score-${id}-speedtype`)?.value,device:c.assistiveDevice});
-    }else result=buildScoreEntry(id,$(`#score-${id}`)?.value,{device:c.assistiveDevice});
+      result=buildScoreEntry(id,null,{distance:$(`#score-${id}-distance`)?.value,time:$(`#score-${id}-time`)?.value,speedType:$(`#score-${id}-speedtype`)?.value,device:c.assistiveDevice,referenceTarget:$(`#score-${id}-reference`)?.value||""});
+    }else result=buildScoreEntry(id,$(`#score-${id}`)?.value,{device:c.assistiveDevice,referenceTarget:$(`#score-${id}-reference`)?.value||""});
     const err=$(`#error-${id}`);if(result.ok){if(err)err.textContent="";scores.push(result.entry)}else{errors++;if(err)err.textContent=result.error}
   });
   if(errors){toast("Fix invalid or missing score entries.");return}
@@ -284,16 +338,26 @@ function renderScores(){
 }
 function renderGoals(){
   const c=ensureWorkingCase();
-  main.innerHTML=pageHead("Draft rehabilitation goals","SMART-style drafts based on clinician-marked domains, entered baselines, and conservative evidence matching.",`<a class="button" href="#/scores">Review scores</a>`) +
+  main.innerHTML=pageHead("Goals & Rehabilitation Plan","SMART-style goals plus an editable session plan based on structured findings, setting, phase and conservative evidence matching.",`<a class="button" href="#/scores">Review scores</a>`) +
     `<section class="card"><h3>${esc(c.nickname||"Working case")}</h3><p>${esc(c.primaryGoal||"No patient priority entered yet.")}</p></section><section class="section">${goalsHtml(c)}</section>
     <section class="section card"><button id="save-goal-case" class="button button-primary">Save goals to local case</button></section>`;
   wireGoalEvents(c,()=>renderGoals());
   $("#save-goal-case")?.addEventListener("click",()=>{if(!c.nickname)c.nickname=`Case ${getCases().length+1}`;upsertCase(c);toast("Goals and case saved locally.")});
 }
 function wireGoalEvents(c,after){
-  $("#generate-goals")?.addEventListener("click",()=>{const tf=$("#goal-timeframe")?.value||"4 weeks";c.goals=generateGoals(c,tf);after?.();toast("Draft goals generated.")});
-  $$("[data-goal-text]").forEach(el=>el.addEventListener("input",e=>{const g=c.goals.find(x=>x.id===e.currentTarget.dataset.goalText);if(g)g.text=e.currentTarget.value}));
-  $$("[data-goal-status]").forEach(el=>el.addEventListener("change",e=>{const g=c.goals.find(x=>x.id===e.currentTarget.dataset.goalStatus);if(g)g.status=e.currentTarget.value}));
+  $("#generate-goals")?.addEventListener("click",()=>{
+    const tf=$("#goal-timeframe")?.value||"4 weeks";
+    c.goals=generateGoals(c,tf);
+    c.plan=generatePlan(c);
+    after?.();
+    toast("SMART goals and rehabilitation plan draft generated.");
+  });
+  $("[data-goal-text]").forEach(el=>el.addEventListener("input",e=>{const g=c.goals.find(x=>x.id===e.currentTarget.dataset.goalText);if(g)g.text=e.currentTarget.value}));
+  $("[data-goal-status]").forEach(el=>el.addEventListener("change",e=>{const g=c.goals.find(x=>x.id===e.currentTarget.dataset.goalStatus);if(g)g.status=e.currentTarget.value}));
+  $("[data-plan-dose]").forEach(el=>el.addEventListener("input",e=>{if(c.plan?.dose)c.plan.dose[e.currentTarget.dataset.planDose]=e.currentTarget.value}));
+  $("[data-plan-focus]").forEach(el=>el.addEventListener("input",e=>{const group=c.plan?.focus?.[Number(e.currentTarget.dataset.planFocus)];if(group)group.items=e.currentTarget.value.split("\n").map(x=>x.trim()).filter(Boolean)}));
+  $("[data-plan-next]")?.addEventListener("input",e=>{if(c.plan)c.plan.nextSession=e.currentTarget.value.split("\n").map(x=>x.trim()).filter(Boolean)});
+  $("[data-plan-followup]")?.addEventListener("input",e=>{if(c.plan)c.plan.followUp=e.currentTarget.value.split("\n").map(x=>x.trim()).filter(Boolean)});
 }
 function caseCard(c){
   const dx=conditionById[c.diagnosisId]?.name||"Generic neuro";
