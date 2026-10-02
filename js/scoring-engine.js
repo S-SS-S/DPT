@@ -26,7 +26,7 @@ export function buildScoreEntry(measureId,raw,extra={}){
   if(m.inputType==="gait-speed"&&extra.distance&&extra.time){
     const speed=calculateGaitSpeed(extra.distance,extra.time);
     if(speed===null)return {ok:false,error:"Distance and time must both be greater than 0."};
-    return {ok:true,entry:{measureId,value:Number(speed.toFixed(3)),unit:"m/s",protocol:{distance:Number(extra.distance),time:Number(extra.time),speedType:extra.speedType||"comfortable",device:extra.device||""}}};
+    return {ok:true,entry:{measureId,value:Number(speed.toFixed(3)),unit:"m/s",protocol:{distance:Number(extra.distance),time:Number(extra.time),speedType:extra.speedType||"comfortable",device:extra.device||"",referenceTarget:extra.referenceTarget||""}}};
   }
   const result=validateMeasureValue(m,raw);
   if(!result.valid)return {ok:false,error:result.message};
