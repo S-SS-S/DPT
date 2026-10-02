@@ -37,7 +37,7 @@ const sampleStroke = {
   diagnosisId: "ischemic-stroke",
   phase: "acute",
   setting: "outpatient",
-  assessment: { concerns: ["gait", "balance"], details: { gait: { assistance: "Contact guard", pattern: "Reduced left foot clearance" }, motor: { side: "Left", lowerStrength: "Hip flexion 3/5" } } },
+  assessment: { concerns: ["gait", "balance", "motor", "tone"], details: { gait: { assistance: "Contact guard", pattern: "Reduced left foot clearance" }, motor: { side: "Left", lowerStrength: "Hip flexion 3/5", lowerRom: "Ankle dorsiflexion limited to neutral" }, tone: { type: "Spasticity", distribution: "Lower limb", side: "Left", mas: "Plantarflexors 1+" } } },
   selectedMeasures: ["10mwt", "bbs"],
   timepoints: [
     { date: "2026-09-01", label: "Initial", scores: [
@@ -70,8 +70,12 @@ console.log("PASS: mappings, score validation, gait-speed calculation, and conse
 const goals = generateGoals(sampleStroke, "4 weeks");
 check(goals.length > 0, "SMART goal generation should use the working case.");
 check(goals.some(g => g.baseline && !g.baseline.includes("No linked")), "Goals should link to a structured or score baseline.");
+const motorGoal = goals.find(g => g.domain === "motor");
+check(Boolean(motorGoal?.baseline?.includes("Hip flexion 3/5")), "Motor SMART goal should carry structured strength baseline.");
 
 const plan = generatePlan({...sampleStroke, setting:"outpatient", phase:"subacute"});
 check(Boolean(plan?.dose?.sessions), "Rehabilitation plan should include an estimated session block.");
 check((plan?.focus||[]).some(group => group.domain === "gait"), "Rehabilitation plan should include gait focus for a gait-priority case.");
+const tonePlan = (plan?.focus||[]).find(group => group.domain === "tone");
+check(Boolean(tonePlan?.baseline?.includes("Plantarflexors 1+")), "Tone plan should show the structured MAS baseline that generated the focus.");
 check((plan?.nextSession||[]).length >= 3, "Rehabilitation plan should include next-session guidance.");
