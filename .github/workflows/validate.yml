@@ -20,5 +20,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+      - name: Check JavaScript syntax
+        run: |
+          find js tests -name '*.js' -o -name '*.mjs' | while read file; do node --check "$file"; done
       - name: Run dependency-free smoke tests
         run: npm test
