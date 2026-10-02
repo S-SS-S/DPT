@@ -177,12 +177,12 @@ function assessmentFieldControl(domain,field,value){
   const id=`finding-${domain.id}-${field.key}`;
   const common=`id="${id}" data-assessment-domain="${domain.id}" data-assessment-field="${field.key}"`;
   if(field.type==="select"){
-    return `<div class="field"><label for="${id}">${esc(field.label)}</label><select ${common}>${(field.options||[""]).map(opt=>`<option value="${esc(opt)}" ${String(value||"")===String(opt)?"selected":""}>${esc(opt||"Not recorded")}</option>`).join("")}</select></div>`;
+    return `<div class="field"><label for="${id}">${esc(field.label)}</label><select ${common}>${(field.options||[""]).map(opt=>`<option value="${esc(opt)}" ${String(value??"")===String(opt)?"selected":""}>${esc(opt||"Not recorded")}</option>`).join("")}</select></div>`;
   }
   if(field.type==="textarea"){
     return `<div class="field field-span-2"><label for="${id}">${esc(field.label)}</label><textarea ${common} placeholder="${esc(field.placeholder||"")}">${esc(value||"")}</textarea></div>`;
   }
-  return `<div class="field"><label for="${id}">${esc(field.label)}${field.unit?` <span class="score-note">(${esc(field.unit)})</span>`:""}</label><input ${common} type="${field.type==="number"?"number":"text"}" ${field.type==="number"?'step="any"':""} value="${esc(value||"")}" placeholder="${esc(field.placeholder||"")}"></div>`;
+  return `<div class="field"><label for="${id}">${esc(field.label)}${field.unit?` <span class="score-note">(${esc(field.unit)})</span>`:""}</label><input ${common} type="${field.type==="number"?"number":"text"}" ${field.type==="number"?'step="any"':""} value="${esc(value??"")}" placeholder="${esc(field.placeholder||"")}"></div>`;
 }
 function assessmentChecklist(c){
   const condition=conditionById[c.diagnosisId];
