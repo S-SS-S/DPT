@@ -249,7 +249,7 @@ function planHtml(c){
     <div class="field"><label>Estimated session block</label><input data-plan-dose="sessions" value="${esc(plan.dose?.sessions||"")}"></div>
     <div class="field field-span-2"><label>Planning rationale</label><textarea readonly>${esc(plan.dose?.rationale||"")}</textarea></div>
   </div><div class="notice notice-warning" style="margin-top:14px">${esc(plan.disclaimer||"")}</div></div>
-  <div class="grid grid-2 section">${(plan.focus||[]).map((group,i)=>`<div class="card"><div class="card-top"><h3>${esc(group.title)}</h3>${chip(group.title,"recommended")}</div><label class="field" style="margin-top:12px"><span>Exercise / task focus</span><textarea data-plan-focus="${i}">${esc((group.items||[]).join("\n"))}</textarea></label></div>`).join("")}</div>
+  <div class="grid grid-2 section">${(plan.focus||[]).map((group,i)=>`<div class="card"><div class="card-top"><h3>${esc(group.title)}</h3>${chip(group.title,"recommended")}</div><div class="reference-badge"><strong>Assessment basis:</strong> ${esc(group.baseline||"No linked baseline")}</div><label class="field" style="margin-top:12px"><span>Exercise / task focus</span><textarea data-plan-focus="${i}">${esc((group.items||[]).join("\n"))}</textarea></label></div>`).join("")}</div>
   <div class="grid grid-2 section"><div class="card"><h3>Next session plan</h3><textarea class="plan-textarea" data-plan-next>${esc((plan.nextSession||[]).join("\n"))}</textarea></div><div class="card"><h3>Follow-up / progression</h3><textarea class="plan-textarea" data-plan-followup>${esc((plan.followUp||[]).join("\n"))}</textarea></div></div></section>`;
 }
 function goalsHtml(c){
