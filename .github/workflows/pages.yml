@@ -45,5 +45,5 @@ jobs:
           curl -fsSL --retry 8 --retry-all-errors --retry-delay 2 "$BASE/css/styles.css" >/dev/null
           curl -fsSL --retry 8 --retry-all-errors --retry-delay 2 "$BASE/js/app.js" | grep -Fq 'Clinical Insight Engine'
           curl -fsSL --retry 8 --retry-all-errors --retry-delay 2 "$BASE/manifest.webmanifest" | grep -Fq 'Neuro PT Clinical Companion'
-          curl -fsSL --retry 8 --retry-all-errors --retry-delay 2 "$BASE/service-worker.js" | grep -Fq 'neuropt-v1.1.0'
+          curl -fsSL --retry 8 --retry-all-errors --retry-delay 2 "$BASE/service-worker.js" | grep -Fq 'neuropt-v1.2.0'
           echo "Production smoke check passed: $PAGE_URL"
