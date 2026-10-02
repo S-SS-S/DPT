@@ -3,6 +3,7 @@ import { measures, measureById } from "../js/data/measures.js";
 import { references } from "../js/data/references.js";
 import { calculateGaitSpeed, validateMeasureValue } from "../js/scoring-engine.js";
 import { interpretCase } from "../js/clinical-engine.js";
+import { generateGoals, generatePlan } from "../js/goal-engine.js";
 
 const failures = [];
 const check = (condition, message) => { if (!condition) failures.push(message); };
@@ -36,7 +37,7 @@ const sampleStroke = {
   diagnosisId: "ischemic-stroke",
   phase: "acute",
   setting: "outpatient",
-  assessment: { concerns: ["gait", "balance"] },
+  assessment: { concerns: ["gait", "balance"], details: { gait: { assistance: "Contact guard", pattern: "Reduced left foot clearance" }, motor: { side: "Left", lowerStrength: "Hip flexion 3/5" } } },
   selectedMeasures: ["10mwt", "bbs"],
   timepoints: [
     { date: "2026-09-01", label: "Initial", scores: [
@@ -64,3 +65,13 @@ if (failures.length) {
 
 console.log(`PASS: ${conditions.length} conditions, ${measures.length} measures, ${Object.keys(references).length} reference records.`);
 console.log("PASS: mappings, score validation, gait-speed calculation, and conservative change interpretation.");
+
+
+const goals = generateGoals(sampleStroke, "4 weeks");
+check(goals.length > 0, "SMART goal generation should use the working case.");
+check(goals.some(g => g.baseline && !g.baseline.includes("No linked")), "Goals should link to a structured or score baseline.");
+
+const plan = generatePlan({...sampleStroke, setting:"outpatient", phase:"subacute"});
+check(Boolean(plan?.dose?.sessions), "Rehabilitation plan should include an estimated session block.");
+check((plan?.focus||[]).some(group => group.domain === "gait"), "Rehabilitation plan should include gait focus for a gait-priority case.");
+check((plan?.nextSession||[]).length >= 3, "Rehabilitation plan should include next-session guidance.");
