@@ -347,8 +347,14 @@ function renderGoals(){
 function wireGoalEvents(c,after){
   $("#generate-goals")?.addEventListener("click",()=>{
     const insight=interpretCase(c);
+    const hasStructuredFindings=Object.values(c.assessment?.details||{}).some(group=>Object.values(group||{}).some(v=>String(v??"").trim()));
+    const hasSavedScores=(c.timepoints||[]).some(tp=>(tp.scores||[]).length);
     if(!insight.priorities.length){
-      toast("Enter structured assessment findings or mark at least one priority domain before generating the plan.");
+      toast("Mark at least one clinically relevant priority domain or save a relevant outcome score first.");
+      return;
+    }
+    if(!hasStructuredFindings&&!hasSavedScores){
+      toast("Enter actual assessment findings or save outcome scores before generating the rehabilitation plan.");
       return;
     }
     const tf=$("#goal-timeframe")?.value||"4 weeks";
