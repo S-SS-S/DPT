@@ -31,7 +31,6 @@ export function interpretCase(caseData){
   const {latest,previous}=getLatestEntries(caseData);
   const concerns=new Set(caseData.assessment?.concerns||[]);
   const details=caseData.assessment?.details||{};
-  const detailDomains=new Set(Object.entries(details).filter(([,v])=>Object.values(v||{}).some(hasValue)).map(([k])=>k));
   const measuredDomains=new Set();
   const scoreStatements=[];
   const changeStatements=[];
@@ -87,8 +86,7 @@ export function interpretCase(caseData){
 
   const priorityDomains=[...new Set([
     ...concerns,
-    ...detailDomains,
-    ...(condition?.goalDomains||[]).filter(d=>concerns.has(d)||detailDomains.has(d)||measuredDomains.has(d))
+    ...(condition?.goalDomains||[]).filter(d=>concerns.has(d)||measuredDomains.has(d))
   ])];
 
   const priorities=priorityDomains.map(d=>{
